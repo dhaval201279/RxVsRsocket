@@ -1,0 +1,131 @@
+//import com.github.jengelman.gradle.plugins.processes.tasks.JavaFork
+//import groovy.json.JsonSlurper
+
+plugins {
+	id 'org.springframework.boot' version '2.3.0.RELEASE'
+	id 'io.spring.dependency-management' version '1.0.10.RELEASE'
+	id 'java'
+	id "com.github.johnrengelman.processes" version '0.5.0'
+}
+
+apply plugin: 'scala'
+apply plugin: 'com.github.johnrengelman.processes'
+
+group = 'com.its'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '1.8'
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	//implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-rsocket'
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	compileOnly 'org.codehaus.groovy:groovy-all:2.4.4'
+	testCompile 'org.scala-lang:scala-library:2.12.5'
+	testCompile 'io.gatling.highcharts:gatling-charts-highcharts:3.3.0'
+}
+
+test {
+	useJUnitPlatform()
+}
+
+//task startSpringBoot(type: JavaFork) {
+/*task startSpringBoot {
+	description = 'Start RxVsRsocket cllient application in the background.'
+	group = 'Load Test'
+	classpath = sourceSets.main.runtimeClasspath
+	main = 'com.its.RxVsRsocket.RxVsRsocketApplication'
+}*/
+
+//startSpringBoot.dependsOn assemble
+
+/*task stopSpringBoot {
+	description = 'Stop the instance of RxVsRsocket cllient  application that was started with \'startSpringBoot\''
+	group = 'Load Test'
+	doLast {
+		startSpringBoot.processHandle.abort()
+	}
+}*/
+
+/*task waitUntilSpringBootIsUp {
+	description = 'Call the /actuator/health endpoint and wait until it responds with the status UP.'
+	group = 'Load Test'
+	doLast {
+
+		String healthCheckURL = 'http://localhost:8090/actuator/health'
+		boolean success = false
+		int count = 0
+		while (count < 15 && !success) {
+			println 'Trying to connect to \'' + healthCheckURL + '\' : Attempt number=' + count
+			try {
+				count += 1
+
+				JsonSlurper jsonSlurper = new JsonSlurper()
+				String healthCheckResponseBody = healthCheckURL.toURL().text
+				println healthCheckResponseBody
+
+				Object result = jsonSlurper.parseText(healthCheckResponseBody)
+				Map jsonResult = (Map) result
+
+				String status = (String) jsonResult.get('status')
+
+				success = (status == 'UP')
+			}
+			catch (all) {
+				sleep(5 * 1000) // wait for another 5 seconds until next retry
+			}
+		}
+		if (success) {
+			println 'SUCCEFULLY Connected to \'' + healthCheckURL + '\''
+		} else {
+			println 'FAILED to Connected to \'' + healthCheckURL + '\''
+		}
+	}
+}*/
+
+//waitUntilSpringBootIsUp.dependsOn startSpringBoot
+
+task loadTest (type: JavaExec) {
+	description = 'Load Test of Rx and RSocket APIs With Gatling'
+	group = 'Load Test'
+	classpath = sourceSets.test.runtimeClasspath
+
+	jvmArgs = [
+			"-Dgatling.core.directory.binaries=${sourceSets.test.java.outputDir.toString()}",
+			/*"-Dgatling.core.directory.binaries=${sourceSets.test.output.classesDir.toString()}",*/
+			"-Dlogback.configurationFile=${logbackGatlingConfig()}"
+	]
+
+	main = "io.gatling.app.Gatling"
+
+	args = [
+			'--simulation', 'com.its.RxVsRsocket.GatlingApiLoadTest',
+			'--results-folder', "${buildDir}/gatling-results",
+			"--binaries-folder", sourceSets.test.java.outputDir.toString()
+			/*'--binaries-folder', sourceSets.test.output.classesDir.toString()*/
+
+	]
+}
+
+def logbackGatlingConfig() {
+	return sourceSets.test.resources.find { it.name == 'logback-gatling.xml'};
+}
+
+//loadTest.dependsOn waitUntilSpringBootIsUp
+//loadTest.finalizedBy stopSpringBoot
